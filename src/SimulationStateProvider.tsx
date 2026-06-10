@@ -94,10 +94,15 @@ export function SimulationStateProvider({
   const driverRef = useRef<SimulatedDriver | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tRef = useRef(0);
+  // Track the live transport + whether a session is active so the unmount
+  // cleanup can tear them down (an empty-dep effect can't read props/state).
+  const transportRef = useRef<SimulationTransport | undefined>(undefined);
+  const activeRef = useRef(false);
 
   // ── start ────────────────────────────────────────────────────────────
   const start = useCallback(() => {
     if (transport) {
+      transportRef.current = transport;
       transport.start(canvas, store.setFrame);
     } else {
       const driver = new SimulatedDriver();
@@ -114,6 +119,7 @@ export function SimulationStateProvider({
         });
       }, 100);
     }
+    activeRef.current = true;
     setRunning(true);
   }, [transport, canvas, store]);
 
@@ -129,6 +135,8 @@ export function SimulationStateProvider({
       driverRef.current?.stop();
       driverRef.current = null;
     }
+    transportRef.current = undefined;
+    activeRef.current = false;
     store.setFrame(null);
     setRunning(false);
   }, [transport, store]);
@@ -150,6 +158,12 @@ export function SimulationStateProvider({
   useEffect(() => {
     return () => {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
+      // Tear down an in-flight session on unmount so the SSE EventSource and
+      // server-side session don't leak when the editor closes mid-simulation.
+      if (activeRef.current) {
+        transportRef.current?.stop();
+        driverRef.current?.stop();
+      }
     };
   }, []);
 
