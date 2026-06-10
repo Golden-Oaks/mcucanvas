@@ -21,6 +21,6 @@
   "peerDependencies": { "react": "^19", "react-dom": "^19", "@xyflow/react": "^12" },
   "devDependencies": {
     "react": "^19.2.7", "react-dom": "^19.2.7", "@xyflow/react": "^12.9.3",
-    "@types/react": "^19", "@types/react-dom": "^19", "tsup": "^8", "typescript": "^5.9.3"
+    "tsup": "^8", "typescript": "^5.9.3"
   }
 }
