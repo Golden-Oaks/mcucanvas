@@ -1,0 +1,26 @@
+{
+  "name": "mcucanvas",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".":     { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./core":{ "types": "./dist/core.d.ts",  "import": "./dist/core.js"  }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepare": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "lucide-react": "^0.562.0", "motion": "^12.40.0" },
+  "peerDependencies": { "react": "^19", "react-dom": "^19", "@xyflow/react": "^12" },
+  "devDependencies": {
+    "react": "^19.2.7", "react-dom": "^19.2.7", "@xyflow/react": "^12.9.3",
+    "@types/react": "^19", "@types/react-dom": "^19", "tsup": "^8", "typescript": "^5.9.3"
+  }
+}
