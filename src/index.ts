@@ -15,3 +15,5 @@ export { TempCardBody } from "./cards/TempCardBody";
 export type { SimulationTransport } from "./transport";
 export { McuCanvas } from "./McuCanvas";
 export type { McuCanvasProps } from "./McuCanvas";
+export { McuCanvasEditor } from "./McuCanvasEditor";
+export type { McuCanvasEditorProps, CanvasSelection } from "./McuCanvasEditor";

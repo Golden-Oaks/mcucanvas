@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { ChevronRight, ChevronLeft } from "lucide-react";
-import { McuCanvas, projectionFromMcuFiles } from "mcucanvas";
-import type { CanvasProjection } from "mcucanvas";
+import {
+  McuCanvasEditor,
+  SimulationStateProvider,
+  projectionFromMcuFiles,
+  projectionToMcuFiles,
+} from "mcucanvas";
+import type { CanvasProjection, CanvasCommand } from "mcucanvas";
 import { sample } from "./sampleProject";
 
 export function App() {
@@ -67,6 +72,30 @@ export function App() {
     [computeProjection],
   );
 
+  // Canvas edits flow the other way: serialize the edited projection back into
+  // the source panel so the JSON always mirrors the canvas. This is a plain
+  // setState (not a textarea edit), so it does NOT re-trigger computeProjection.
+  const handleCanvasChange = useCallback(
+    (next: CanvasProjection, _intent: CanvasCommand) => {
+      const { projectJson, layoutJson } = projectionToMcuFiles(next);
+      const serialized = JSON.stringify(
+        { project: projectJson, layout: layoutJson },
+        null,
+        2,
+      );
+      setProjection(next);
+      setSource(serialized);
+      lastGoodSourceRef.current = serialized;
+      setError(null);
+      setStatusMessages([]);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    },
+    [],
+  );
+
   // Cleanup debounce on unmount.
   useEffect(() => {
     return () => {
@@ -76,10 +105,15 @@ export function App() {
 
   return (
     <div className="flex h-screen w-screen">
-      {/* Canvas region */}
+      {/* Canvas region — editable; drag / wire / delete mirror into the panel. */}
       <div className="flex-1 relative">
         {projection ? (
-          <McuCanvas projection={projection} />
+          <SimulationStateProvider canvas={projection}>
+            <McuCanvasEditor
+              projection={projection}
+              onChange={handleCanvasChange}
+            />
+          </SimulationStateProvider>
         ) : error ? (
           <div className="flex h-full items-center justify-center text-red-500">
             <p>{error}</p>
@@ -91,7 +125,7 @@ export function App() {
         )}
       </div>
 
-      {/* Right panel */}
+      {/* Right panel — the mcu source JSON; edits flow both ways. */}
       <div
         className={`flex flex-col border-l border-slate-200 bg-white transition-all duration-200 ${
           collapsed ? "w-10" : "w-96"
@@ -101,7 +135,7 @@ export function App() {
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
           {!collapsed && (
             <span className="text-sm font-semibold text-slate-700">
-              Source
+              Source · mirrors canvas
             </span>
           )}
           <button
