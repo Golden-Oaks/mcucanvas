@@ -7,7 +7,7 @@ import {
   projectionToMcuFiles,
 } from "mcucanvas";
 import type { CanvasProjection, CanvasCommand } from "mcucanvas";
-import { sample } from "./sampleProject";
+import { sample, sampleCatalog } from "./sampleProject";
 
 export function App() {
   const [source, setSource] = useState(() =>
@@ -35,6 +35,10 @@ export function App() {
       const proj = await projectionFromMcuFiles({
         projectJson: obj.project,
         layoutJson: obj.layout,
+        // Pin metadata lives outside the editable source so canvas round-trips
+        // (project + layout) don't have to carry it; it gives nodes their full
+        // pin set so "Add Pin" has unwired pins to reveal.
+        catalogJson: sampleCatalog,
       });
 
       setProjection(proj);
