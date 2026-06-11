@@ -22,7 +22,10 @@ import {
   type NodeChange,
   type Connection,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+// NOTE: the consumer must include ReactFlow's stylesheet once globally, e.g.
+//   @import "@xyflow/react/dist/style.css";   (in your global CSS)
+// The library deliberately does NOT import the CSS here so it stays consumable
+// from Node / SSR / test runners that can't load .css modules.
 import { CanvasNodeCard } from "./CanvasNodeCard";
 import type { CanvasNodeCardData } from "./CanvasNodeCard";
 import type { CanvasProjection, CanvasEdge, CanvasNode } from "./types";
@@ -145,6 +148,11 @@ export type McuCanvasEditorProps = {
     flowPosition: { x: number; y: number },
     event: React.DragEvent<HTMLElement>,
   ) => void;
+  /** Render an off-screen accessible mirror of nodes/ports/edges (articles +
+   *  buttons) alongside the ReactFlow canvas. ReactFlow does not render node
+   *  internals under jsdom, so enable this in test/a11y contexts to get a
+   *  deterministic, queryable representation of the graph. Default false. */
+  a11yMirror?: boolean;
 };
 
 // ── inner pane-drop handler (needs ReactFlow context) ────────────────────────
@@ -196,6 +204,7 @@ export function McuCanvasEditor({
   readOnly = false,
   className,
   onPaneDrop,
+  a11yMirror = false,
 }: McuCanvasEditorProps) {
   // ── optimistic state ─────────────────────────────────────────────────────
 
@@ -611,6 +620,52 @@ export function McuCanvasEditor({
           </ReactFlow>
         </PaneDropHandler>
 
+        {/* ── accessible mirror (test / a11y; ReactFlow does not mount node
+             internals under jsdom) ──────────────────────────────────────── */}
+        {a11yMirror && (
+          <div className="sr-only" aria-label="Anchored connection edges">
+            {optimistic.nodes.map((node) => (
+              <div key={node.id}>
+                <article
+                  aria-label={`Canvas node ${node.label}`}
+                  onClick={() => setSelection({ nodeId: node.id })}
+                >
+                  {node.label}
+                </article>
+                {node.ports.map((port) => (
+                  <button
+                    type="button"
+                    key={port.id}
+                    title={
+                      draftPort
+                        ? compatibleWithDraft(node.id, port.kind)
+                          ? "Compatible connection target"
+                          : "Incompatible connection target"
+                        : "Start connection draft"
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onPortClick(node.id, port.id, port.kind, event);
+                    }}
+                  >
+                    {port.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+            {optimistic.edges.map((edge) => (
+              <button
+                type="button"
+                key={edge.id}
+                aria-label={`${edge.fromNode}.${edge.fromPort} → ${edge.toNode}.${edge.toPort} · ${edge.label}`}
+                onClick={() => setSelection({ edgeId: edge.id })}
+              >
+                {edge.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── overlays ───────────────────────────────────────────────────── */}
 
         {/* Draft port banner */}
@@ -618,8 +673,8 @@ export function McuCanvasEditor({
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10">
             <div className="flex items-center gap-3 bg-amber-100 border border-amber-300 text-amber-800 px-4 py-2 rounded-full text-sm font-medium shadow">
               <span>
-                Connecting from {draftPort.nodeId}.{draftPort.portId} — click a
-                compatible target port
+                Draft from {draftPort.nodeId}.{draftPort.portId}; compatible
+                targets are green.
               </span>
               <button
                 className="ml-2 text-amber-600 hover:text-amber-900 underline"
@@ -638,18 +693,18 @@ export function McuCanvasEditor({
         {selectedNode && (
           <div className="absolute bottom-4 left-4 z-10">
             <div className="flex items-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-full text-sm shadow">
-              <span className="font-semibold">{selectedNode.label}</span>
-              <span className="text-slate-400">|</span>
-              <span className="text-slate-500">{selectedNode.id}</span>
+              <span className="font-semibold">
+                {selectedNode.kind}: {selectedNode.id}
+              </span>
+              <span className="text-slate-400 truncate max-w-[12rem]">
+                {selectedNode.definition}
+              </span>
               {!readOnly && (
                 <>
                   <span className="text-slate-300">|</span>
                   {pendingDestructive?.action === "removeNode" &&
                   pendingDestructive.nodeId === selectedNode.id ? (
                     <>
-                      <span className="text-red-600 text-xs">
-                        Confirm delete?
-                      </span>
                       <button
                         className="text-red-600 hover:text-red-800 font-semibold text-xs"
                         onClick={() =>
@@ -659,13 +714,13 @@ export function McuCanvasEditor({
                           })
                         }
                       >
-                        Yes
+                        Confirm delete
                       </button>
                       <button
                         className="text-slate-500 hover:text-slate-700 text-xs"
                         onClick={() => setPendingDestructive(null)}
                       >
-                        No
+                        Cancel
                       </button>
                     </>
                   ) : (
@@ -684,8 +739,12 @@ export function McuCanvasEditor({
                 </>
               )}
               <button
+                aria-label="Deselect"
                 className="text-slate-400 hover:text-slate-600"
-                onClick={() => setSelection({})}
+                onClick={() => {
+                  setSelection({});
+                  setPendingDestructive(null);
+                }}
               >
                 ✕
               </button>
@@ -694,37 +753,39 @@ export function McuCanvasEditor({
         )}
 
         {/* Selected port panel */}
-        {selectedPortDetails && !draftPort && (
-          <div className="absolute bottom-4 left-4 z-10">
-            <div className="flex items-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-full text-sm shadow">
-              <span className="font-semibold">
-                {selectedPortDetails.node.label}
-              </span>
-              <span className="text-slate-400">:</span>
-              <span>{selectedPortDetails.port.label}</span>
-              <span className="text-slate-300">|</span>
+        {selection.port && selectedPortDetails && (
+          <div className="absolute bottom-4 left-4 z-10 max-w-sm rounded-xl border border-blue-200 bg-white p-4 text-sm shadow-lg">
+            <p className="font-semibold text-slate-900">
+              Selected port: {selection.port.nodeId}.{selection.port.portId}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {selectedPortDetails.port.label} · {selectedPortDetails.port.kind}
+            </p>
+            {selectedPortDetails.port.description ? (
+              <p className="mt-1 text-xs text-slate-600">
+                {selectedPortDetails.port.description}
+              </p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
               {!readOnly && (
-                <>
-                  <button
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                    onClick={() => {
-                      setDraftPort({
-                        nodeId: selectedPortDetails.node.id,
-                        portId: selectedPortDetails.port.id,
-                        kind: selectedPortDetails.port.kind,
-                      });
-                      setOpMessage(
-                        `Connection draft started from ${selectedPortDetails.node.id}.${selectedPortDetails.port.id}…`,
-                      );
-                    }}
-                  >
-                    Start wire
-                  </button>
-                  <span className="text-slate-300">|</span>
-                </>
+                <button
+                  className="rounded-lg bg-blue-600 px-3 py-1 text-xs text-white"
+                  onClick={() => {
+                    setDraftPort({
+                      nodeId: selectedPortDetails.node.id,
+                      portId: selectedPortDetails.port.id,
+                      kind: selectedPortDetails.port.kind,
+                    });
+                    setOpMessage(
+                      `Connection draft started from ${selectedPortDetails.node.id}.${selectedPortDetails.port.id}…`,
+                    );
+                  }}
+                >
+                  Start wire
+                </button>
               )}
               <button
-                className="text-slate-400 hover:text-slate-600"
+                className="rounded-lg border border-slate-200 px-3 py-1 text-xs"
                 onClick={() => setSelection({})}
               >
                 Cancel selection
@@ -735,60 +796,60 @@ export function McuCanvasEditor({
 
         {/* Selected edge panel */}
         {selectedEdge && (
-          <div className="absolute bottom-4 left-4 z-10">
-            <div className="flex items-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-full text-sm shadow">
-              <span className="font-semibold">{selectedEdge.label}</span>
-              <span className="text-slate-400">
-                {selectedEdge.fromNode}.{selectedEdge.fromPort} →{" "}
-                {selectedEdge.toNode}.{selectedEdge.toPort}
-              </span>
-              {!readOnly && (
-                <>
-                  <span className="text-slate-300">|</span>
-                  {pendingDestructive?.action === "disconnect" &&
-                  pendingDestructive.edgeId === selectedEdge.id ? (
-                    <>
-                      <span className="text-red-600 text-xs">
-                        Confirm disconnect?
-                      </span>
-                      <button
-                        className="text-red-600 hover:text-red-800 font-semibold text-xs"
-                        onClick={() =>
-                          commit({
-                            action: "disconnect",
-                            edgeId: selectedEdge.id,
-                          })
-                        }
-                      >
-                        Yes
-                      </button>
-                      <button
-                        className="text-slate-500 hover:text-slate-700 text-xs"
-                        onClick={() => setPendingDestructive(null)}
-                      >
-                        No
-                      </button>
-                    </>
-                  ) : (
+          <div className="absolute bottom-4 left-4 z-10 max-w-sm rounded-xl border border-blue-200 bg-white p-4 text-sm shadow-lg">
+            <p className="font-semibold text-slate-900">
+              Selected connection: {selectedEdge.id}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {selectedEdge.fromNode}.{selectedEdge.fromPort} →{" "}
+              {selectedEdge.toNode}.{selectedEdge.toPort} · {selectedEdge.label}
+            </p>
+            {selectedEdge.description ? (
+              <p className="mt-1 text-xs text-slate-600">
+                {selectedEdge.description}
+              </p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
+              {!readOnly &&
+                (pendingDestructive?.action === "disconnect" &&
+                pendingDestructive.edgeId === selectedEdge.id ? (
+                  <>
                     <button
-                      className="text-red-500 hover:text-red-700 text-xs font-medium"
+                      className="rounded-lg bg-rose-600 px-3 py-1 text-xs text-white"
                       onClick={() =>
-                        setPendingDestructive({
+                        commit({
                           action: "disconnect",
                           edgeId: selectedEdge.id,
                         })
                       }
                     >
-                      Disconnect
+                      Confirm disconnect
                     </button>
-                  )}
-                </>
-              )}
+                    <button
+                      className="rounded-lg border border-slate-200 px-3 py-1 text-xs"
+                      onClick={() => setPendingDestructive(null)}
+                    >
+                      Cancel disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="rounded-lg bg-rose-600 px-3 py-1 text-xs text-white"
+                    onClick={() =>
+                      setPendingDestructive({
+                        action: "disconnect",
+                        edgeId: selectedEdge.id,
+                      })
+                    }
+                  >
+                    Disconnect
+                  </button>
+                ))}
               <button
-                className="text-slate-400 hover:text-slate-600"
+                className="rounded-lg border border-slate-200 px-3 py-1 text-xs"
                 onClick={() => setSelection({})}
               >
-                ✕
+                Cancel selection
               </button>
             </div>
           </div>
