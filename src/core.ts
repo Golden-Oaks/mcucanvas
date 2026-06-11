@@ -4,3 +4,5 @@ export * from "./drivers/driver";
 export * from "./drivers/simulated-driver";
 export * from "./catalog";
 export * from "./projection";
+export * from "./mutations";
+export * from "./serialize";
