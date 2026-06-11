@@ -3,3 +3,4 @@ export * from "./peripheral-state";
 export * from "./drivers/driver";
 export * from "./drivers/simulated-driver";
 export * from "./catalog";
+export * from "./projection";
