@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+@source "../../src";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
