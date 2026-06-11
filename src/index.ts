@@ -13,3 +13,5 @@ export { MotorCardBody } from "./cards/MotorCardBody";
 export { OledCardBody } from "./cards/OledCardBody";
 export { TempCardBody } from "./cards/TempCardBody";
 export type { SimulationTransport } from "./transport";
+export { McuCanvas } from "./McuCanvas";
+export type { McuCanvasProps } from "./McuCanvas";
