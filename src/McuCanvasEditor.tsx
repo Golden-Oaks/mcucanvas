@@ -626,12 +626,13 @@ export function McuCanvasEditor({
           <div className="sr-only" aria-label="Anchored connection edges">
             {optimistic.nodes.map((node) => (
               <div key={node.id}>
+                {/* Accessible name comes from aria-label only — no text child,
+                    so getByText(node.label) still matches the real card's <h3>
+                    rather than colliding with this mirror. */}
                 <article
                   aria-label={`Canvas node ${node.label}`}
                   onClick={() => setSelection({ nodeId: node.id })}
-                >
-                  {node.label}
-                </article>
+                />
                 {node.ports.map((port) => (
                   <button
                     type="button"
